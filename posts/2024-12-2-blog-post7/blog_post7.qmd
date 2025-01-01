@@ -1,0 +1,180 @@
+---
+title: "Blog post7"
+subtitle: ""
+author: "group 3"
+date: "2024-12-2"
+description: "Thesis: The level of tuition paid is a significant predictor of employment success, with higher tuition payments correlating to increased earnings within the first five years after college. The ability to afford higher tuition is closely linked to socioeconomic status and parental income. This relationship perpetuates the cycle of poverty and systemic disparities, disproportionately affecting Black students and other minority groups."
+image-alt: ""
+categories: []
+date-modified: "2024-12-9"
+draft: false
+---
+
+```{r}
+library(tidyverse)
+library(dplyr)
+library(ggplot2)
+library(tidyr)
+```
+
+```{r}
+education_cohort_combined_data1 <- read_rds("dataset/education_cohort_combined_data.rds")
+
+education_cohort_combined_data1 <- education_cohort_combined_data1 |>
+  mutate(
+    EARN_MDN_5YR = as.numeric(EARN_MDN_5YR)
+  ) |>
+  select(
+    'EARN_MDN_5YR',
+    'INSTNM',
+    'EARN_COUNT_WNE_5YR',
+    'CIPDESC',
+    'CREDDESC',
+    'ZIP',
+    starts_with('PCT_'),
+    'NPT4_PRIV',
+    'NPT4_PUB'
+  )
+
+
+field_summary <- education_cohort_combined_data1 |>
+  group_by(CIPDESC) |>
+  summarise(
+    Avg_Earning_5YR = mean(EARN_MDN_5YR, na.rm = TRUE),
+    Total_Earning_5YR = sum(EARN_MDN_5YR, na.rm = TRUE),
+    Count = n()
+  ) |>
+  arrange(desc(Total_Earning_5YR))
+```
+
+```{r}
+Institution_summary <- education_cohort_combined_data1 |>
+  group_by(INSTNM) |>
+  summarise(
+    Avg_Earning_5YR = mean(EARN_MDN_5YR, na.rm = TRUE),
+    Total_Earning_5YR = sum(EARN_MDN_5YR, na.rm = TRUE),
+    Count = n()
+  ) |>
+  arrange(desc(Total_Earning_5YR)) |>
+  arrange(desc(Avg_Earning_5YR))
+```
+
+```{r}
+top_schools_tuition <- education_cohort_combined_data1 |> # listing schools with the tuition from high to low
+  mutate(Max_Tuition = pmax(NPT4_PUB, NPT4_PRIV, na.rm = TRUE)) |>
+  group_by(INSTNM) |>
+  summarise(Max_Tuition = max(Max_Tuition, na.rm = TRUE)) |>
+  arrange(desc(Max_Tuition))
+
+  top_schools <- top_schools_tuition |>
+    top_n(20, Max_Tuition)
+  ggplot(top_schools, aes(x = reorder(INSTNM, Max_Tuition), y = Max_Tuition)) +
+  geom_bar(stat = "identity", fill = "steelblue") +
+  coord_flip() +
+  labs(
+    title = "Top 20 Schools with the Most Expensive Tuition",
+    x = "School Name",
+    y = "Tuition Cost (in $)"
+  ) +
+  theme_minimal()
+```
+
+
+```{r}
+# Total earnings of different fields of study ranking
+top_fields <- field_summary |>
+  top_n(30, Total_Earning_5YR)
+#Listing the fields of study with the highest employment outcomes in a descending order
+ggplot(top_fields, aes(x = reorder(CIPDESC, -Total_Earning_5YR), y = Total_Earning_5YR)) +
+  geom_bar(stat = "identity") +
+  coord_flip() +
+  labs(title = "Top Fields of Study Total Earnings", x = "Field of Study", y = "Total Earnings)")
+```
+
+```{r}
+# Average earnings of different fields of study ranking
+top_fields2 <- field_summary |>
+  top_n(30, Avg_Earning_5YR)
+#Listing the fields of study with the highest employment outcomes in a descending order
+ggplot(top_fields2, aes(x = reorder(CIPDESC, -Avg_Earning_5YR), y = Avg_Earning_5YR)) +
+  geom_bar(stat = "identity") +
+  coord_flip() +
+  labs(title = "Top Fields of Study Average Earnings", x = "Field of Study", y = "Average Earnings)")
+```
+
+```{r}
+# Bar chart for top institutions in Massachusetts
+top_institutions <- Institution_summary %>%
+  top_n(10, Avg_Earning_5YR)
+
+ggplot(top_institutions, aes(x = reorder(INSTNM, -Avg_Earning_5YR), y = Avg_Earning_5YR)) +
+  geom_bar(stat = "identity") +
+  coord_flip() +
+  labs(title = "Top Institutions by Employment Outcomes", x = "Institution", y = "Average Earning (5 Years After Completion)")
+```
+
+```{r}
+# Convert PCT_RACE to numeric
+education_cohort_combined_data1$PCT_WHITE <- as.numeric(education_cohort_combined_data1$PCT_WHITE)
+education_cohort_combined_data1$PCT_BLACK <- as.numeric(education_cohort_combined_data1$PCT_BLACK)
+education_cohort_combined_data1$PCT_ASIAN <- as.numeric(education_cohort_combined_data1$PCT_ASIAN)
+education_cohort_combined_data1$PCT_HISPANIC <- as.numeric(education_cohort_combined_data1$PCT_HISPANIC)
+
+# Check if columns used in weighted.mean are numeric
+str(education_cohort_combined_data1$PCT_WHITE)  # Should be numeric
+str(education_cohort_combined_data1$EARN_COUNT_WNE_5YR)  # Should be numeric
+```
+
+```{r}
+education_cohort_combined_data1 <- education_cohort_combined_data1 |>
+  mutate(
+    EARN_COUNT_WNE_5YR = as.numeric(EARN_COUNT_WNE_5YR)  # Convert to numeric
+  )
+```
+
+```{r}
+# Remove rows with NA in key columns
+education_cohort_combined_data1 <- education_cohort_combined_data1 |>
+  filter(!is.na(EARN_MDN_5YR) & !is.na(PCT_WHITE) & !is.na(PCT_BLACK))
+
+field_race_summary <- education_cohort_combined_data1 |>
+  group_by(CIPDESC) |>
+  summarise(
+    Avg_White = weighted.mean(PCT_WHITE, EARN_COUNT_WNE_5YR, na.rm = TRUE),
+    Avg_Black = weighted.mean(PCT_BLACK, EARN_COUNT_WNE_5YR, na.rm = TRUE),
+    Avg_Hispanic = weighted.mean(PCT_HISPANIC, EARN_COUNT_WNE_5YR, na.rm = TRUE),
+    Avg_Asian = weighted.mean(PCT_ASIAN, EARN_COUNT_WNE_5YR, na.rm = TRUE),
+    Avg_Earnings = mean(EARN_MDN_5YR, na.rm = TRUE)
+  ) |>
+  arrange(desc(Avg_Earnings))
+
+field_race_summary
+```
+
+```{r}
+# Combine tuition columns, arrange by descending tuition, and calculate mean earnings
+tuition_earnings_table <- education_cohort_combined_data1 |>
+  mutate(tuition = coalesce(NPT4_PRIV, NPT4_PUB)) |>  # Combine tuition columns
+  group_by(INSTNM) |>  # Group by institution
+  summarize(
+    mean_earn_5yr = mean(EARN_MDN_5YR, na.rm = TRUE),  # Calculate mean of earnings
+    max_tuition = max(tuition, na.rm = TRUE),  # Get maximum tuition for each institution
+    .groups = "drop"
+  ) |>
+  arrange(desc(max_tuition))  # Arrange by tuition in descending order
+
+tuition_earnings_table
+```
+
+```{r}
+# Create scatter plot with best-fit line
+ggplot(tuition_earnings_table, aes(x = max_tuition, y = mean_earn_5yr)) +
+  geom_point(color = "blue", size = 3) +  # Scatter points
+  geom_smooth(method = "lm", color = "red", se = TRUE) +  # Best-fit line with confidence interval
+  labs(
+    title = "Mean Earnings vs. Maximum Tuition with Best-Fit Line",
+    x = "Maximum Tuition",
+    y = "Mean Earnings 5 Years After Graduation"
+  ) +
+  theme_minimal()
+```
